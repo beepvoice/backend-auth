@@ -14,7 +14,7 @@ use iron::prelude::*;
 use iron::headers::{ Authorization, Bearer };
 use iron::status::Status;
 use router::Router;
-use urlencoded::UrlEncodedQuery;
+use urlencoded::{ UrlDecodingError, UrlEncodedQuery };
 use std::env;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -44,7 +44,8 @@ fn main() {
                     }
                 }
             },
-            Err(_) => return Ok(Response::with((Status::BadRequest, "400 Bad Request"))),
+            Err(UrlDecodingError::BodyError(_)) => return Ok(Response::with((Status::BadRequest, "400 Bad Request"))),
+            Err(UrlDecodingError::EmptyQuery) => (),
         };
 
         // Check token from Authorization header
