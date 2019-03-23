@@ -42,7 +42,7 @@ fn main() {
         let mut token = None;
 
         // Check token from querystring of forwarded URI
-        if let Some(forwarded_uri) = req.headers.get_raw("X-Forwarded-URI") {
+        if let Some(forwarded_uri) = req.headers.get_raw("X-Forwarded-Uri") {
             if !forwarded_uri.is_empty() {
                 let forwarded_uri = match std::str::from_utf8(&forwarded_uri[0]) {
                     Ok(uri) => uri,
