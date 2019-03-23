@@ -7,12 +7,14 @@ extern crate dotenv;
 extern crate iron;
 extern crate router;
 extern crate jsonwebtoken as jwt;
+extern crate urlencoded;
 
 use dotenv::dotenv;
 use iron::prelude::*;
 use iron::headers::{ Authorization, Bearer };
 use iron::status::Status;
 use router::Router;
+use urlencoded::UrlEncodedQuery;
 use std::env;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -31,8 +33,28 @@ fn main() {
     }
 
     fn verify_jwt(req:&mut Request) -> IronResult<Response> {
+        let mut token = None;
+
+        // Check token from querystring
+        match req.get_ref::<UrlEncodedQuery>() {
+            Ok(ref hashmap) => {
+                if let Some(token_vec) = hashmap.get("token") {
+                    if !token_vec.is_empty() {
+                        token = Some(token_vec[0].clone());
+                    }
+                }
+            },
+            Err(_) => return Ok(Response::with((Status::BadRequest, "400 Bad Request"))),
+        };
+
+        // Check token from Authorization header
         if let Some(authorisation_header) = req.headers.get::<Authorization<Bearer>>() {
-            match jwt::decode::<UserClaims>(&authorisation_header.token, secret.as_ref(), &jwt::Validation{ validate_exp:false, ..Default::default()}) { // Don't validate expiry
+            token = Some(authorisation_header.token.clone());
+        }
+
+        // Process token
+        if let Some(token) = token {
+            match jwt::decode::<UserClaims>(&token, secret.as_ref(), &jwt::Validation{ validate_exp:false, ..Default::default()}) { // Don't validate expiry
             // match jwt::decode::<UserClaims>(&authorisation_header.token, secret.as_ref(), &jwt::Validation::default()) { // Production version
                 Ok(decoded) => {
                     let user_string = match serde_json::to_string(&decoded.claims) {
