@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate serde;
 extern crate serde_json;
+extern crate serde_qs;
 #[macro_use]
 extern crate lazy_static;
 extern crate dotenv;
@@ -23,6 +24,11 @@ struct UserClaims {
     clientid: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct TokenString {
+    token: Option<String>,
+}
+
 fn main() {
     dotenv().ok();
 
@@ -35,18 +41,20 @@ fn main() {
     fn verify_jwt(req:&mut Request) -> IronResult<Response> {
         let mut token = None;
 
-        // Check token from querystring
-        match req.get_ref::<UrlEncodedQuery>() {
-            Ok(ref hashmap) => {
-                if let Some(token_vec) = hashmap.get("token") {
-                    if !token_vec.is_empty() {
-                        token = Some(token_vec[0].clone());
-                    }
-                }
-            },
-            Err(UrlDecodingError::BodyError(_)) => return Ok(Response::with((Status::BadRequest, "400 Bad Request"))),
-            Err(UrlDecodingError::EmptyQuery) => (),
-        };
+        // Check token from querystring of forwarded URI
+        if let Some(forwarded_uri) = req.headers.get_raw("X-Forwarded-URI") {
+            if !forwarded_uri.is_empty() {
+                let forwarded_uri = match std::str::from_utf8(&forwarded_uri[0]) {
+                    Ok(uri) => uri,
+                    Err(_) => return Ok(Response::with((Status::BadRequest, "400 Bad Request"))),
+                };
+                let qs:TokenString = match serde_qs::from_str(forwarded_uri) {
+                    Ok(qs) => qs,
+                    Err(_) => return Ok(Response::with((Status::BadRequest, "400 Bad Request"))),
+                };
+                token = qs.token;
+            }
+        }
 
         // Check token from Authorization header
         if let Some(authorisation_header) = req.headers.get::<Authorization<Bearer>>() {
