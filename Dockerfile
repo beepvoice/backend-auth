@@ -1,40 +1,15 @@
-# FROM rust:1.32 as build
-FROM alpine:3.9 AS build
+FROM golang:1.11-rc-alpine as build
 
-RUN apk add --no-cache gcc musl-dev
-RUN apk add --no-cache rust cargo
+RUN apk add --no-cache git=2.18.1-r0
 
-# RUN rustup target add x86_64-unknown-linux-musl
+WORKDIR /src
+COPY go.mod go.sum .env *.go ./
+RUN go get -d -v ./...
+RUN CGO_ENABLED=0 go build -ldflags "-s -w"
 
-# Create new empty shell project
-RUN USER=root cargo new --bin app
-WORKDIR /app
+FROM scratch
 
-# Copy over Cargo.toml
-COPY ./Cargo.toml ./Cargo.toml
+COPY --from=build /src/auth /auth
+COPY --from=build /src/.env /.env
 
-# Change target env
-ENV RUSTFLAGS="-C target-cpu=native"
-# ENV RUSTFLAGS="-C target-cpu=x86_64_alpine-linux-musl"
-# Run build step to cache dependencies
-RUN cargo build --release
-RUN rm src/*.rs
-
-# Copy over src files
-COPY ./src/main.rs ./src/main.rs
-
-# Build for release
-RUN rm ./target/release/deps/backend_auth*
-RUN cargo build --release
-
-# Copy over .env
-COPY ./.env ./.env
-
-FROM alpine:3.9
-
-RUN apk add --no-cache gcc
-
-COPY --from=build /app/target/release .
-COPY --from=build /app/.env .env
-
-ENTRYPOINT ["./backend-auth"]
+ENTRYPOINT ["/auth"]
