@@ -1,8 +1,10 @@
 package main
 
 import (
+  "crypto/rsa"
   "encoding/json"
   "fmt"
+  "io/ioutil"
   "log"
   "net/http"
   "net/url"
@@ -15,7 +17,7 @@ import (
 )
 
 var listen string
-var secret []byte
+var publicKey *rsa.PublicKey
 
 func main() {
   // Load .env
@@ -24,7 +26,17 @@ func main() {
     log.Fatal("Error loading .env file")
   }
   listen = os.Getenv("LISTEN")
-  secret = []byte(os.Getenv("SECRET"))
+
+  // Load RSA public key
+  publicKeyBytes, err := ioutil.ReadFile("key.pub")
+  if err != nil {
+    log.Fatal(err)
+  }
+
+  publicKey, err = jwt.ParseRSAPublicKeyFromPEM(publicKeyBytes)
+  if err != nil {
+    log.Fatal(err)
+  }
 
   // Routes
   router := httprouter.New()
@@ -81,10 +93,10 @@ func Auth(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
   // Parse token
   token, err := jwt.Parse(tokenString, func (token *jwt.Token) (interface{}, error) {
-    if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+    if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
       return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
     }
-    return secret, nil
+    return publicKey, nil
   })
   if err != nil {
     http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
